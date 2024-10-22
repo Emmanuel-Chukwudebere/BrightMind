@@ -1,13 +1,15 @@
 from app import create_app
 import os
+from flask_script import Manager, Shell
 
 # Create an instance of the Flask app using the factory pattern
-app = create_app()
+app = create_app(os.getenv('FLASK_CONFIG') or 'default')
+manager = Manager(app)
+
+def make_shell_context():
+    return dict(app=app)
+
+manager.add_command("shell", Shell(make_context=make_shell_context))
 
 if __name__ == "__main__":
-    # Define the port and debug mode
-    port = int(os.getenv("PORT", 5000))  # Default port is 5000 if not specified
-    debug = os.getenv("FLASK_ENV", "production") == "development"  # Run in debug mode if FLASK_ENV=development
-
-    # Run the Flask application
-    app.run(host="0.0.0.0", port=port, debug=debug)
+    manager.run()
