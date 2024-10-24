@@ -113,34 +113,40 @@ def search_web(query):
 
     return retry_operation(fetch_search_results, max_retries=3)
 
-def send_fcm_notification(user_id, message):
+def send_fcm_notification(user_token, title, body):
     """
-    Sends a push notification to a specific user via Firebase Cloud Messaging (FCM).
+    Sends a push notification using FCM HTTP v1 API.
     
-    Parameters:
-    - user_id: The ID of the user to send the notification to.
-    - message: The notification message.
-    
+    Args:
+        user_token (str): The target user's FCM token.
+        title (str): The title of the notification.
+        body (str): The message body.
+
     Returns:
-    - True if the notification was sent successfully, or None if the request fails.
+        dict: FCM response or error message.
     """
-    url = "https://fcm.googleapis.com/fcm/send"
+    url = "https://fcm.googleapis.com/v1/projects/brightmind-1/messages:send"
     headers = {
-        "Authorization": f"key={FCM_SERVER_KEY}",
+        "Authorization": f"Bearer " + FCM_SERVER_KEY,
         "Content-Type": "application/json"
     }
-    data = {
-        "to": f"/topics/{user_id}",
-        "notification": {
-            "title": "BrightMind Notification",
-            "body": message
+    payload = {
+        "message": {
+            "token": user_token,
+            "notification": {
+                "title": title,
+                "body": body
+            }
         }
     }
 
-    def send_notification():
-        response = requests.post(url, headers=headers, json=data)
+    try:
+        response = requests.post(url, json=payload, headers=headers)
         response.raise_for_status()
-        logging.info(f"Notification sent to user {user_id}")
-        return True
-
-    return retry_operation(send_notification, max_retries=3)
+        return response.json()
+    except requests.exceptions.HTTPError as err:
+        logging.error(f"HTTP error occurred: {err}")
+        return {"error": str(err)}
+    except Exception as err:
+        logging.error(f"Error sending FCM notification: {err}")
+        return {"error": str(err)}

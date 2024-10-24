@@ -21,38 +21,48 @@ def retry_operation(func, max_retries=3, backoff_factor=2, *args, **kwargs):
             attempt += 1
     return None
 
-def send_fcm_notification(user_id, message):
+def send_fcm_notification(user_token, message_title, message_body):
     """
-    Sends a notification to a specific user using Firebase Cloud Messaging (FCM).
+    Sends a notification using Firebase Cloud Messaging HTTP v1 API.
     
-    Parameters:
-    - user_id: The ID of the user to send the notification to.
-    - message: The notification message content.
-    
+    Args:
+        user_token (str): The user's FCM token.
+        message_title (str): The title of the notification.
+        message_body (str): The body of the notification.
+
     Returns:
-    - A dictionary indicating success or failure.
+        dict: The response from FCM if successful, or error message if failed.
     """
-    url = "https://fcm.googleapis.com/fcm/send"
+    url = "https://fcm.googleapis.com/v1/projects/brightmind-1/messages:send"
     headers = {
-        "Authorization": f"key={FCM_SERVER_KEY}",
+        "Authorization": f"Bearer {FCM_SERVER_KEY}",
         "Content-Type": "application/json"
     }
-    data = {
-        "to": f"/topics/{user_id}",  # Target user via topic-based notification
-        "notification": {
-            "title": "BrightMind Notification",
-            "body": message
+    payload = {
+        "message": {
+            "token": user_token,  # Target specific device
+            "notification": {
+                "title": message_title,
+                "body": message_body
+            }
         }
     }
 
-    def send_notification():
-        response = requests.post(url, headers=headers, json=data)
-        response.raise_for_status()
-        logging.info(f"Notification sent to user {user_id}")
-        return {"message": "Notification sent successfully"}
-
-    # Retry sending notification in case of temporary failures
-    result = retry_operation(send_notification, max_retries=3, backoff_factor=2)
-    if result:
-        return result
-    return {"error": "Notification service unavailable. Please try again later"}
+    try:
+        response = requests.post(url, json=payload, headers=headers)
+        response.raise_for_status()  # Ensure we catch non-200 responses
+        return response.json()
+    except requests.exceptions.HTTPError as err:
+        if response.status_code == 401:  # Unauthorized: FCM token may have expired
+            logging.error(f"Invalid FCM token: {user_token}. Error: {err}")
+            return {"error": "Invalid FCM token"}
+        elif response.status_code == 429:  # Rate limit exceeded
+            logging.error(f"Rate limit exceeded: {err}")
+            sleep(1)  # Simple backoff strategy (can be enhanced)
+            return {"error": "Rate limit exceeded, retry later"}
+        else:
+            logging.error(f"Error sending FCM notification: {err}")
+            return {"error": str(err)}
+    except Exception as e:
+        logging.error(f"Unexpected error while sending FCM notification: {e}")
+        return {"error": str(e)}

@@ -12,8 +12,9 @@ class NotificationTestCase(unittest.TestCase):
         response = self.client.post('/notifications/send-notification', headers={
             "Authorization": f"Bearer {token}"
         }, json={
-            "user_id": "test_user_id",
-            "message": "This is a test notification"
+            "user_token": "dummy_fcm_token",
+            "title": "Test Notification",
+            "body": "This is a test notification."
         })
         self.assertEqual(response.status_code, 200)
         self.assertEqual(json.loads(response.data)["message"], "Notification sent successfully")

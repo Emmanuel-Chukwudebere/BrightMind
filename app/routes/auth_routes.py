@@ -1,5 +1,5 @@
 from flask import Blueprint, request, jsonify
-from app.models.user_model import create_user, get_user, update_profile, update_settings, generate_jwt
+from app.models.user_model import create_user, get_user, update_profile, update_settings, generate_jwt, upload_profile_picture
 from app.services.validation_service import validate_signup_input, validate_jwt_token
 from app.services.firebase_service import auth
 from flask_limiter import Limiter
@@ -66,6 +66,26 @@ def signup():
     except Exception as e:
         logging.error(f"Unexpected error during signup: {str(e)}")
         return jsonify({"error": "An unexpected error occurred"}), 500
+
+# Route for Profile Picture
+@auth_bp.route('/profile/picture', methods=['POST'])
+def upload_profile_picture_route():
+    """
+    Uploads the user's profile picture and stores the URL in Firestore.
+    """
+    token = request.headers.get('Authorization')
+    user_data = validate_jwt_token(token)
+    if not user_data:
+        return jsonify({"error": "Unauthorized"}), 401
+
+    if 'file' not in request.files:
+        return jsonify({"error": "No file provided"}), 400
+    
+    file = request.files['file']
+    profile_url = upload_profile_picture(user_data['user_id'], file)
+    
+    return jsonify({"profile_picture_url": profile_url}), 200
+
 
 # Route for user login
 @auth_bp.route('/login', methods=['POST'])
