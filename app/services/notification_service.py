@@ -58,7 +58,7 @@ def send_fcm_notification(user_token, message_title, message_body):
             return {"error": "Invalid FCM token"}
         elif response.status_code == 429:  # Rate limit exceeded
             logging.error(f"Rate limit exceeded: {err}")
-            sleep(1)  # Simple backoff strategy (can be enhanced)
+            time.sleep(1)  # Simple backoff strategy (can be enhanced)
             return {"error": "Rate limit exceeded, retry later"}
         else:
             logging.error(f"Error sending FCM notification: {err}")
