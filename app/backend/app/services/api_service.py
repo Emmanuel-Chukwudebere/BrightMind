@@ -135,7 +135,7 @@ def ask_ai(question, context=None, input_format="text"):
         # Return text answer if input format was text
         return answer, {'Content-Type': 'text/plain'}
 
-def generate_topic_summary(topic: str, level: str, language: str = 'english') -> Tuple[str, List[str]]:
+def generate_topic_summary(topic: str, level: str, language: str = 'english') -> tuple[str, List[str]]:
     """
     Generates a summary and outline for the topic using Mistral-7B.
     
