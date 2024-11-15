@@ -4,11 +4,11 @@
     "slug": "brightmind",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/brightmind-logo-white-icon.png",
+    "icon": "./assets/images/brightmind-logo-white-icon.png",
     "owner": "e_chukwudebere",
     "userInterfaceStyle": "light",
     "splash": {
-      "image": "./assets/splash.png",
+      "image": "./assets/images/splash.png",
       "resizeMode": "contain",
       "backgroundColor": "#02124E"
     },
@@ -17,7 +17,10 @@
     ],
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.brightmind.app"
+      "bundleIdentifier": "com.brightmind.app",
+      "runtimeVersion": {
+        "policy": "appVersion"
+      }
     },
     "android": {
       "adaptiveIcon": {
@@ -27,13 +30,14 @@
       "package": "com.brightmind.app",
       "versionCode": 1,
       "permissions": [
-        "INTERNET",
-        "ACCESS_NETWORK_STATE",
-        "CAMERA",
-        "READ_EXTERNAL_STORAGE",
-        "WRITE_EXTERNAL_STORAGE",
-        "RECORD_AUDIO"
-      ]
+        "android.permission.INTERNET",
+        "android.permission.ACCESS_NETWORK_STATE",
+        "android.permission.CAMERA",
+        "android.permission.READ_EXTERNAL_STORAGE",
+        "android.permission.WRITE_EXTERNAL_STORAGE",
+        "android.permission.RECORD_AUDIO"
+      ],
+      "runtimeVersion": "1.0.0"
     },
     "plugins": [
       "expo-router",
@@ -49,6 +53,17 @@
     "experiments": {
       "typedRoutes": true
     },
-    "scheme": "brightmind"
+    "scheme": "brightmind",
+    "extra": {
+      "router": {
+        "origin": false
+      },
+      "eas": {
+        "projectId": "b2ca0569-4609-4365-a034-d6dd32f19783"
+      }
+    },
+    "updates": {
+      "url": "https://u.expo.dev/b2ca0569-4609-4365-a034-d6dd32f19783"
+    }
   }
 }
