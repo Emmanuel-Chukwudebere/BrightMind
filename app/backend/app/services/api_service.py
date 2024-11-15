@@ -149,7 +149,7 @@ def generate_topic_summary(topic: str, level: str, language: str = 'english') ->
     """
     url = "https://api-inference.huggingface.co/models/mistralai/Mistral-7B-Instruct-v0.3"
     
-    def request() -> Tuple[str, List[str]]:
+    def request() -> tuple[str, List[str]]:
         prompt = (
             "<s>[INST] "
             f"Create a comprehensive {level} level course about {topic}. "
@@ -198,7 +198,7 @@ def generate_topic_summary(topic: str, level: str, language: str = 'english') ->
         
         return "", []
     
-    def retry_request() -> Tuple[str, List[str]]:
+    def retry_request() -> tuple[str, List[str]]:
         max_attempts = 3
         for attempt in range(max_attempts):
             try:

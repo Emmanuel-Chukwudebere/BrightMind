@@ -1,8 +1,9 @@
 // src/services/api.ts
 import axios, { AxiosError, AxiosInstance } from 'axios';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { API_BASE_URL } from '../config/app.config';
 
-const BASE_URL = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3000/api/v1';
+const BASE_URL = process.env.EXPO_PUBLIC_API_URL || API_BASE_URL;
 
 class ApiService {
   private instance: AxiosInstance;
@@ -40,7 +41,7 @@ class ApiService {
       async (error: AxiosError) => {
         if (error.response?.status === 401) {
           await AsyncStorage.removeItem('authToken');
-          // Redirect to login or refresh token
+          // Redirect to login
         }
         return Promise.reject(error);
       }
@@ -75,38 +76,39 @@ export const api = new ApiService();
 export const endpoints = {
   auth: {
     login: '/auth/login',
-    register: '/auth/register',
+    signup: '/auth/signup',
     forgotPassword: '/auth/forgot-password',
     resetPassword: '/auth/reset-password',
-    refreshToken: '/auth/refresh-token',
+    profile: (userId: string) => `/auth/profile/${userId}`,
+    settings: (userId: string) => `/auth/settings/${userId}`,
+    uploadImage: '/auth/profile/picture'
   },
   topics: {
-    list: '/topics',
-    search: (query: string) => `/topics/search?q=${query}`,
-    byId: (id: string) => `/topics/${id}`,
-    download: (id: string) => `/topics/${id}/download`,
-    delete: (id: string) => `/topics/${id}`,
-    progress: (id: string) => `/topics/${id}/progress`,
-  },
-  lessons: {
-    list: '/lessons',
+    list: '/lessons',  // Using lessons routes for topics
     byId: (id: string) => `/lessons/${id}`,
     complete: (id: string) => `/lessons/${id}/complete`,
     progress: (id: string) => `/lessons/${id}/progress`,
+    download: (id: string) => `/lessons/${id}/download`,
+    delete: (id: string) => `/lessons/${id}/delete`,
+    size: (id: string) => `/lessons/${id}/size`,
+    content: (id: string) => `/lessons/${id}/content`
   },
   quizzes: {
-    list: '/quizzes',
-    byId: (id: string) => `/quizzes/${id}`,
-    submit: (id: string) => `/quizzes/${id}/submit`,
-    reset: (id: string) => `/quizzes/${id}/reset`,
-    results: (id: string) => `/quizzes/${id}/results`,
+    list: '/quiz',
+    byId: (id: string) => `/quiz/${id}`,
+    submit: (id: string) => `/quiz/${id}/submit`,
+    reset: (id: string) => `/quiz/${id}/reset`,
+    results: (id: string) => `/quiz/${id}/results`,
   },
   profile: {
-    get: '/profile',
-    update: '/profile',
-    uploadImage: '/profile/image',
-    notifications: '/profile/notifications',
-    settings: '/profile/settings',
+    get: (userId: string) => `/auth/profile/${userId}`,
+    update: (userId: string) => `/auth/profile/${userId}`,
+    uploadImage: '/auth/profile/picture',
+    settings: (userId: string) => `/auth/settings/${userId}`
+  },
+  notifications: {
+    send: '/notifications/send-notification',
+    subscribe: '/notifications/subscribe',
   },
   streaming: {
     start: (topicId: string, level: string) => 
@@ -114,6 +116,14 @@ export const endpoints = {
     status: (requestId: string) => 
       `/streaming/status/${requestId}`,
   },
+  ai: {
+    ask: '/ai/ask-ai',
+    textToSpeech: '/ai/text-to-speech',
+    speechToText: '/ai/speech-to-text'
+  },
+  search: {
+    explore: (query: string) => `/search/search?screen=explore&query=${query}`
+  }
 };
 
 // Helper functions
@@ -125,8 +135,8 @@ export async function deleteDownloadedTopic(topicId: string) {
   return api.delete(endpoints.topics.delete(topicId));
 }
 
-export async function getLessonById(lessonId: string) {
-  return api.get(endpoints.lessons.byId(lessonId));
+export async function getTopicById(topicId: string) {
+  return api.get(endpoints.topics.byId(topicId));
 }
 
 export async function resetQuiz(quizId: string) {
@@ -137,8 +147,8 @@ export async function submitQuiz(quizId: string, answers: Record<string, any>) {
   return api.post(endpoints.quizzes.submit(quizId), answers);
 }
 
-export async function updateProfile(data: Record<string, any>) {
-  return api.put(endpoints.profile.update, data);
+export async function updateProfile(userId: string, data: Record<string, any>) {
+  return api.put(endpoints.profile.update(userId), data);
 }
 
 export async function uploadProfileImage(formData: FormData) {
@@ -149,6 +159,26 @@ export async function uploadProfileImage(formData: FormData) {
   });
 }
 
-export async function updateNotificationSettings(settings: Record<string, boolean>) {
-  return api.put(endpoints.profile.notifications, settings);
+export async function updateSettings(userId: string, settings: Record<string, any>) {
+  return api.put(endpoints.profile.settings(userId), settings);
+}
+
+export async function sendNotification(data: { userId: string; title: string; body: string }) {
+  return api.post(endpoints.notifications.send, data);
+}
+
+export async function subscribeToNotifications(data: { fcmToken: string; subscriptions: string[] }) {
+  return api.post(endpoints.notifications.subscribe, data);
+}
+
+export async function askAI(data: { question: string; context?: string }) {
+  return api.post(endpoints.ai.ask, data);
+}
+
+export async function textToSpeech(data: { text: string }) {
+  return api.post(endpoints.ai.textToSpeech, data);
+}
+
+export async function speechToText(data: FormData) {
+  return api.post(endpoints.ai.speechToText, data);
 }
