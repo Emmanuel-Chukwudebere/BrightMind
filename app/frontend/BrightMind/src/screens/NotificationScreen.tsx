@@ -5,6 +5,7 @@ import { useNavigation } from '@react-navigation/native';
 import { BackButton } from '../components/navigation/BackButton';
 import PrimaryButton from '../components/PrimaryButton';
 import NotificationCard from '../components/NotificationCard';
+import { api, sendNotification } from '../services/api';
 
 const NotificationScreen = () => {
   const navigation = useNavigation();
@@ -16,9 +17,7 @@ const NotificationScreen = () => {
 
   const loadNotifications = async () => {
     try {
-      const response = await fetch('dummyurl/api/v1/notifications/send-notification', {
-        method: 'POST',
-      });
+      const response = await api.get('notifications');
       const data = await response.json();
       setNotifications(data);
     } catch (error) {

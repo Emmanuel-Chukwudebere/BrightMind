@@ -1,9 +1,8 @@
 // src/services/api.ts
 import axios, { AxiosError, AxiosInstance } from 'axios';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { API_BASE_URL } from '../config/app.config';
 
-const BASE_URL = process.env.EXPO_PUBLIC_API_URL || API_BASE_URL;
+const BASE_URL = process.env.EXPO_PUBLIC_API_URL || 'brightmind.onrender.com/api/v1';
 
 class ApiService {
   private instance: AxiosInstance;
@@ -89,9 +88,7 @@ export const endpoints = {
     complete: (id: string) => `/lessons/${id}/complete`,
     progress: (id: string) => `/lessons/${id}/progress`,
     download: (id: string) => `/lessons/${id}/download`,
-    delete: (id: string) => `/lessons/${id}/delete`,
-    size: (id: string) => `/lessons/${id}/size`,
-    content: (id: string) => `/lessons/${id}/content`
+    delete: (id: string) => `/lessons/${id}/delete`
   },
   quizzes: {
     list: '/quiz',
@@ -108,7 +105,7 @@ export const endpoints = {
   },
   notifications: {
     send: '/notifications/send-notification',
-    subscribe: '/notifications/subscribe',
+    subscribe: '/notifications/subscribe'
   },
   streaming: {
     start: (topicId: string, level: string) => 

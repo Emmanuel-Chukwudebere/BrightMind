@@ -4,6 +4,7 @@ import { View, Text, StyleSheet, Switch } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { BackButton } from '../components/navigation/BackButton';
 import PrimaryButton from '../components/PrimaryButton';
+import { subscribeToNotifications } from '../services/api';
 
 const NotificationSettingsScreen = () => {
   const navigation = useNavigation();
@@ -13,9 +14,13 @@ const NotificationSettingsScreen = () => {
 
   const handleSubscribe = async () => {
     try {
-      await fetch('dummyurl/api/v1/notifications/subscribe', { method: 'POST' });
+      await subscribeToNotifications({
+        fcmToken: 'your-fcm-token',
+        subscriptions: ['topics', 'reminders']
+      });
       alert('Subscribed to notifications successfully.');
     } catch (error) {
+      console.error('Error subscribing to notifications:', error);
       alert('Failed to subscribe to notifications.');
     }
   };
