@@ -1,0 +1,54 @@
+{
+  "expo": {
+    "name": "BrightMind",
+    "slug": "brightmind",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/brightmind-logo-white-icon.png",
+    "owner": "e_chukwudebere",
+    "userInterfaceStyle": "light",
+    "splash": {
+      "image": "./assets/splash.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#02124E"
+    },
+    "assetBundlePatterns": [
+      "**/*"
+    ],
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.brightmind.app"
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/images/brightmind-logo-white-icon.png",
+        "backgroundColor": "#ffffff"
+      },
+      "package": "com.brightmind.app",
+      "versionCode": 1,
+      "permissions": [
+        "INTERNET",
+        "ACCESS_NETWORK_STATE",
+        "CAMERA",
+        "READ_EXTERNAL_STORAGE",
+        "WRITE_EXTERNAL_STORAGE",
+        "RECORD_AUDIO"
+      ]
+    },
+    "plugins": [
+      "expo-router",
+      "expo-secure-store",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Allow BrightMind to access your photos for profile picture updates.",
+          "cameraPermission": "Allow BrightMind to access your camera for profile picture updates."
+        }
+      ]
+    ],
+    "experiments": {
+      "typedRoutes": true
+    },
+    "scheme": "brightmind"
+  }
+}

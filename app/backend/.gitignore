@@ -1,0 +1,6 @@
+firebase-adminsdk.json
+.env
+.log
+_pycache_
+app.log
+venv
