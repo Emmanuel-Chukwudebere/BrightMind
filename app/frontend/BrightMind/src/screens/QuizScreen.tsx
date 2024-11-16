@@ -4,7 +4,7 @@ import { View, StyleSheet, SafeAreaView } from 'react-native';
 import Quiz from '../components/Quiz';
 import QuizResultModal from '../components/modals/QuizResultModal';
 import BackButton from '../components/navigation/BackButton';
-import axios from 'axios';
+import { api, submitQuiz, resetQuiz } from '../services/api';
 import { useNetworkStatus } from '../hooks/useNetworkStatus';
 import { useSnackbar } from '../hooks/useSnackbar';
 
@@ -37,10 +37,7 @@ const QuizScreen: React.FC<QuizScreenProps> = ({ route, navigation }) => {
 
     setIsSubmitting(true);
     try {
-      const response = await axios.post(
-        `dummyurl/api/v1/quiz/submit/${quizId}`,
-        answers
-      );
+      const response = await submitQuiz(quizId, answers);
       setQuizScore(response.data.score);
       setShowModal(true);
     } catch (error) {
@@ -58,7 +55,7 @@ const QuizScreen: React.FC<QuizScreenProps> = ({ route, navigation }) => {
     }
 
     try {
-      await axios.put(`dummyurl/api/v1/quiz/reset/${quizId}`);
+      await resetQuiz(quizId);
       setShowModal(false);
     } catch (error) {
       console.error('Error resetting quiz:', error);

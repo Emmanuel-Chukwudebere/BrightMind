@@ -5,7 +5,7 @@ import { Text, Button } from 'react-native-paper';
 import { useNavigation } from '@react-navigation/native';
 import { LevelSelector } from '../components/LevelSelector';
 import { BackButton } from '../components/navigation/BackButton';
-import axios from 'axios';
+import { api } from '../services/api';
 
 interface LearningLevelScreenProps {
   route: {
@@ -27,7 +27,7 @@ export const LearningLevelScreen: React.FC<LearningLevelScreenProps> = ({ route 
     setIsLoading(true);
     try {
       // Start content generation
-      const response = await axios.post('dummyurl/api/v1/content/generate', {
+      const response = await api.post('/content/generate', {
         topicId,
         level: selectedLevel,
       });
@@ -75,5 +75,28 @@ export const LearningLevelScreen: React.FC<LearningLevelScreenProps> = ({ route 
     </View>
   );
 };
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    padding: 16,
+  },
+  header: {
+    marginBottom: 16,
+  },
+  subtitle: {
+    marginTop: 8,
+  },
+  main: {
+    flex: 1,
+    justifyContent: 'center',
+  },
+  label: {
+    marginBottom: 8,
+  },
+  button: {
+    marginTop: 16,
+  },
+});
 
 export default LearningLevelScreen;

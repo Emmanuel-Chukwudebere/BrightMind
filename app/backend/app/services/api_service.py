@@ -150,12 +150,14 @@ def generate_topic_summary(topic: str, level: str, language: str = 'english') ->
     url = "https://api-inference.huggingface.co/models/mistralai/Mistral-7B-Instruct-v0.3"
     
     def request() -> tuple[str, List[str]]:
+        # Make topic more prominent in the prompt
         prompt = (
             "<s>[INST] "
-            f"Create a comprehensive {level} level course about {topic}. "
+            f"You are creating a {level} level course specifically about {topic}. "
+            f"The content must be focused only on {topic}, not any other subject.\n\n"
             "Provide:\n"
-            "1. A clear summary (2-3 sentences)\n"
-            "2. Three lesson outlines with titles and brief descriptions\n"
+            "1. A clear summary of the core concepts in {topic} (2-3 sentences)\n"
+            f"2. Three lesson outlines specifically for {topic} with titles and brief descriptions\n"
             "Format with 'SUMMARY:' and 'Lesson 1:', 'Lesson 2:', 'Lesson 3:' [/INST]"
         )
         
@@ -167,7 +169,8 @@ def generate_topic_summary(topic: str, level: str, language: str = 'english') ->
                 "parameters": {
                     "max_new_tokens": 512,
                     "temperature": 0.7,
-                    "top_p": 0.9
+                    "top_p": 0.9,
+                    "stop": ["[/INST]"]  # Prevent model from continuing instruction format
                 }
             }
         )
@@ -233,13 +236,16 @@ def generate_lessons(outlines: List[str], level: str, language: str = 'english')
     url = "https://api-inference.huggingface.co/models/mistralai/Mistral-7B-Instruct-v0.3"
     
     def generate_single_lesson(outline: str) -> str:
+        # Make topic more prominent in the lesson prompt
         prompt = (
             "<s>[INST] "
-            f"Create a detailed {level} level lesson for the following outline:\n{outline}\n"
-            "Include:\n"
-            "1. Clear explanations of concepts\n"
-            "2. Relevant examples\n"
-            "3. Key points to remember [/INST]"
+            f"Create a detailed {level} level lesson about {topic} for the following outline:\n"
+            f"{outline}\n"
+            f"The lesson must be specifically about {topic} and should include:\n"
+            "1. Clear explanations of {topic} concepts\n"
+            f"2. Relevant {topic} examples\n"
+            "3. Key points to remember\n"
+            f"Ensure all content is focused on {topic} only. [/INST]"
         )
         
         try:
@@ -251,7 +257,8 @@ def generate_lessons(outlines: List[str], level: str, language: str = 'english')
                     "parameters": {
                         "max_new_tokens": 512,
                         "temperature": 0.7,
-                        "top_p": 0.9
+                        "top_p": 0.9,
+                        "stop": ["[/INST]"]
                     }
                 }
             )

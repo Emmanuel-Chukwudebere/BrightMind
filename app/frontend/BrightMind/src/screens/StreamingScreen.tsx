@@ -4,7 +4,7 @@ import { View, StyleSheet, Animated } from 'react-native';
 import { Text, ProgressBar } from 'react-native-paper';
 import { useNavigation } from '@react-navigation/native';
 import { BackButton } from '../components/navigation/BackButton';
-import axios from 'axios';
+import { api } from '../services/api';
 
 const STREAMING_MESSAGES = [
   "Analyzing your learning preferences...",
@@ -33,7 +33,7 @@ export const StreamingScreen: React.FC<StreamingScreenProps> = ({ route }) => {
 
   const checkContentStatus = async () => {
     try {
-      const response = await axios.get(`dummyurl/api/v1/content/status/${contentRequestId}`);
+      const response = await api.get(`/streaming/status/${contentRequestId}`);
       if (response.data.status === 'completed') {
         navigation.navigate('ContentScreen', {
           contentId: response.data.contentId,

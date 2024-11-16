@@ -8,6 +8,7 @@ import { useNetworkStatus } from '../hooks/useNetworkStatus';
 import { useSnackbar } from '../hooks/useSnackbar';
 import { Lesson } from '../types/learning';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { api } from '../services/api';
 
 interface LessonContentScreenProps {
   route: {
@@ -46,8 +47,8 @@ const LessonContentScreen: React.FC<LessonContentScreenProps> = ({ route, naviga
         }
 
         // Load from backend
-        const response = await fetch(`dummyurl/api/v1/lessons/${lessonId}`);
-        const lessonData = await response.json();
+        const response = await api.get(`lessons/${lessonId}`);
+        const lessonData = response.data;
         
         // Cache the lesson
         await AsyncStorage.setItem(`lesson_${lessonId}`, JSON.stringify(lessonData));
@@ -97,5 +98,18 @@ const LessonContentScreen: React.FC<LessonContentScreenProps> = ({ route, naviga
     </SafeAreaView>
   );
 };
+
+const styles = StyleSheet.create({
+  safeArea: {
+    flex: 1,
+  },
+  container: {
+    flex: 1,
+    padding: 16,
+  },
+  content: {
+    flex: 1,
+  },
+});
 
 export default LessonContentScreen;
