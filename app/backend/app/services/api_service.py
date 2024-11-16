@@ -221,7 +221,7 @@ def generate_topic_summary(topic: str, level: str, language: str = 'english') ->
 
     return retry_request()
 
-def generate_lessons(outlines: List[str], level: str, language: str = 'english') -> List[str]:
+def generate_lessons(topic: str, outlines: List[str], level: str, language: str = 'english' ) -> List[str]:
     """
     Generates lesson content based on outlines using Mistral-7B.
     
@@ -235,7 +235,7 @@ def generate_lessons(outlines: List[str], level: str, language: str = 'english')
     """
     url = "https://api-inference.huggingface.co/models/mistralai/Mistral-7B-Instruct-v0.3"
     
-    def generate_single_lesson(outline: str) -> str:
+    def generate_single_lesson(topic: str, level:str, outline: str) -> str:
         # Make topic more prominent in the lesson prompt
         prompt = (
             "<s>[INST] "
