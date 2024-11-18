@@ -24,7 +24,6 @@ import { InputField } from '../components/InputField';
 import { AuthButton } from '../components/AuthButton';
 import { ErrorBoundary } from '../components/ErrorBoundary';
 import { LoadingSpinner } from '../components/LoadingSpinner';
-import { SocialAuthButtons } from '../components/SocialAuthButtons';
 
 // Types
 import { AuthStackScreenProps } from '../types/navigation';
@@ -170,13 +169,6 @@ export const SignInScreen: React.FC<AuthStackScreenProps<'SignIn'>> = ({ navigat
               Forgot password?
             </AuthButton>
 
-            <View style={styles.dividerContainer}>
-              <View style={styles.divider} />
-              <Text style={styles.dividerText}>or</Text>
-              <View style={styles.divider} />
-            </View>
-
-            <SocialAuthButtons />
           </View>
 
           <View style={styles.footerContainer}>
