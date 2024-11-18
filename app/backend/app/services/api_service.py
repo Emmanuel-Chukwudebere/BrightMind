@@ -3,6 +3,7 @@
 import time
 from urllib import response
 import requests
+import re
 import os
 import logging
 from time import sleep
@@ -17,7 +18,10 @@ FCM_SERVER_KEY = os.getenv("FCM_SERVER_KEY")
 
 RETRY_ATTEMPTS = 3
 RETRY_BACKOFF = 2
-headers = {"Authorization": f"Bearer {HF_API_KEY}"}
+headers = {
+    "Authorization": "Bearer {HF_API_KEY}",
+    "Content-Type": "application/json"
+}
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 
@@ -135,122 +139,91 @@ def ask_ai(question, context=None, input_format="text"):
         # Return text answer if input format was text
         return answer, {'Content-Type': 'text/plain'}
 
-def generate_topic_summary(topic: str, level: str, language: str = 'english') -> tuple[str, List[str]]:
+def robust_parse_response(text: str, topic: str) -> tuple[str, List[str]]:
     """
-    Generates a summary and outline for the topic using Mistral-7B.
+    More robust parsing of the model's response
     
     Args:
-        topic (str): The topic to generate content for
-        level (str): Difficulty level of the content
-        language (str): Target language for content
-        
+        text (str): Full model response text
+        topic (str): Topic being generated
+    
     Returns:
-        Tuple[str, List[str]]: Summary and list of outlines
+        tuple of summary and lesson outlines
     """
-    url = "https://api-inference.huggingface.co/models/mistralai/Mistral-7B-Instruct-v0.3"
-    
-    def request() -> tuple[str, List[str]]:
-        # Make topic more prominent in the prompt
-        prompt = (
-            "<s>[INST] "
-            f"You are creating a {level} level course specifically about {topic}. "
-            f"The content must be focused only on {topic}, not any other subject.\n\n"
-            "Provide:\n"
-            "1. A clear summary of the core concepts in {topic} (2-3 sentences)\n"
-            f"2. Three lesson outlines specifically for {topic} with titles and brief descriptions\n"
-            "Format with 'SUMMARY:' and 'Lesson 1:', 'Lesson 2:', 'Lesson 3:' [/INST]"
-        )
-        
-        response = requests.post(
-            url,
-            headers=headers,
-            json={
-                "inputs": prompt,
-                "parameters": {
-                    "max_new_tokens": 512,
-                    "temperature": 0.7,
-                    "top_p": 0.9,
-                    "stop": ["[/INST]"]  # Prevent model from continuing instruction format
-                }
-            }
-        )
-        response.raise_for_status()
-        text = response.json()[0]["generated_text"]
-        
-        # Parse the response
-        parts = text.split("SUMMARY:")
-        if len(parts) > 1:
-            content = parts[1]
-            # Extract summary and outlines
-            lesson_split = content.split("Lesson 1:")
-            summary = lesson_split[0].strip()
-            
-            # Extract lesson outlines
-            outlines = []
-            if len(lesson_split) > 1:
-                lessons_text = "Lesson 1:" + lesson_split[1]
-                outlines = [line.strip() for line in lessons_text.split('\n')
-                           if line.strip() and line.lower().startswith('lesson')]
-            
-            # Translate if needed
-            if language.lower() != 'english':
-                summary = translate_text(summary, language)
-                outlines = [translate_text(outline, language) for outline in outlines]
-            
-            return summary, outlines[:3]
-        
-        return "", []
-    
-    def retry_request() -> tuple[str, List[str]]:
-        max_attempts = 3
-        for attempt in range(max_attempts):
-            try:
-                summary, outlines = request()
-                if summary and len(outlines) == 3:
-                    return summary, outlines
-            except Exception as e:
-                print(f"Attempt {attempt + 1} failed: {str(e)}")
-                if attempt < max_attempts - 1:
-                    time.sleep(2 ** attempt)
-        
+    # Extract content between [/INST] tags
+    content_match = re.search(r'\[/INST\](.*)', text, re.DOTALL)
+    if not content_match:
         return f"Failed to generate summary for {topic}", [
             f"Lesson 1: Introduction to {topic}",
             f"Lesson 2: Core Concepts of {topic}",
             f"Lesson 3: Advanced {topic} Topics"
         ]
+    
+    content = content_match.group(1).strip()
+    
+    # More robust summary extraction
+    summary_match = re.search(r'SUMMARY:\s*(.+?)(?=Lesson 1:|$)', content, re.DOTALL)
+    summary = summary_match.group(1).strip() if summary_match else f"Core concepts of {topic}"
+    
+    # Extract lesson outlines
+    lesson_matches = re.findall(r'(Lesson \d+:.*?)(?=Lesson \d+:|$)', content, re.DOTALL)
+    outlines = lesson_matches[:3] if lesson_matches else [
+        f"Lesson 1: Introduction to {topic}",
+        f"Lesson 2: Core Concepts of {topic}",
+        f"Lesson 3: Advanced {topic} Topics"
+    ]
+    
+    # Clean up outlines
+    outlines = [outline.strip() for outline in outlines]
+    
+    return summary, outlines
 
-    return retry_request()
-
-def generate_lessons(topic: str, outlines: List[str], level: str, language: str = 'english' ) -> List[str]:
+def generate_topic_summary(
+    topic: str, 
+    level: str, 
+    language: str = 'english', 
+    api_url: str = "https://api-inference.huggingface.co/models/mistralai/Mistral-7B-Instruct-v0.3",
+    headers: dict = None
+) -> tuple[str, List[str]]:
     """
-    Generates lesson content based on outlines using Mistral-7B.
+    More robust summary generation with improved error handling
     
     Args:
-        outlines (List[str]): List of lesson outlines
+        topic (str): The topic to generate content for
         level (str): Difficulty level of the content
         language (str): Target language for content
+        api_url (str): Inference API URL
+        headers (dict): API request headers
         
     Returns:
-        List[str]: Generated lesson content
+        tuple[str, List[str]]: Summary and list of outlines
     """
-    url = "https://api-inference.huggingface.co/models/mistralai/Mistral-7B-Instruct-v0.3"
+    # Comprehensive prompt with clear instructions
+    prompt = (
+        "<s>[INST] "
+        f"You are an expert educational content creator focusing on {topic} at a {level} level. "
+        f"Create a comprehensive overview of {topic}.\n\n"
+        "REQUIREMENTS:\n"
+        f"- Write a concise SUMMARY of {topic} in 2-3 sentences\n"
+        "- Include 3 detailed lesson outlines\n"
+        "- Ensure content is precise, educational, and beginner-friendly\n"
+        "FORMAT:\n"
+        "SUMMARY: [Your summary here]\n"
+        "Lesson 1: [Title]\n"
+        "Lesson 2: [Title]\n"
+        "Lesson 3: [Title]\n"
+        "[/INST]"
+    )
     
-    def generate_single_lesson(topic: str, level:str, outline: str) -> str:
-        # Make topic more prominent in the lesson prompt
-        prompt = (
-            "<s>[INST] "
-            f"Create a detailed {level} level lesson about {topic} for the following outline:\n"
-            f"{outline}\n"
-            f"The lesson must be specifically about {topic} and should include:\n"
-            "1. Clear explanations of {topic} concepts\n"
-            f"2. Relevant {topic} examples\n"
-            "3. Key points to remember\n"
-            f"Ensure all content is focused on {topic} only. [/INST]"
-        )
-        
+    # Default retry configuration
+    max_attempts = 3
+    base_delay = 1  # Base delay between retries
+    
+    for attempt in range(max_attempts):
         try:
+            # Make API request
             response = requests.post(
-                url,
+                api_url,
                 headers=headers,
                 json={
                     "inputs": prompt,
@@ -258,33 +231,114 @@ def generate_lessons(topic: str, outlines: List[str], level: str, language: str 
                         "max_new_tokens": 512,
                         "temperature": 0.7,
                         "top_p": 0.9,
+                        "repetition_penalty": 1.1,
                         "stop": ["[/INST]"]
                     }
                 }
             )
             response.raise_for_status()
+            
+            # Extract generated text
+            generated_text = response.json()[0]["generated_text"]
+            
+            # Parse response
+            summary, outlines = robust_parse_response(generated_text, topic)
+            
+            # Validate results
+            if summary and len(outlines) == 3:
+                return summary, outlines
+            
+            print(f"Attempt {attempt + 1}: Insufficient content generated")
+        
+        except Exception as e:
+            print(f"Attempt {attempt + 1} failed: {str(e)}")
+        
+        # Exponential backoff
+        time.sleep(base_delay * (2 ** attempt))
+    
+    # Fallback if all attempts fail
+    return (
+        f"Failed to generate summary for {topic}", 
+        [
+            f"Lesson 1: Introduction to {topic}",
+            f"Lesson 2: Core Concepts of {topic}",
+            f"Lesson 3: Advanced {topic} Topics"
+        ]
+    )
+
+def generate_lessons(
+    topic: str, 
+    outlines: List[str], 
+    level: str, 
+    language: str = 'english',
+    api_url: str = "https://api-inference.huggingface.co/models/mistralai/Mistral-7B-Instruct-v0.3",
+    headers: dict = None
+) -> List[str]:
+    """
+    Improved lesson generation with robust error handling
+    
+    Args:
+        topic (str): The main topic for the lessons
+        outlines (List[str]): List of lesson outlines
+        level (str): Difficulty level of the content
+        language (str): Target language for content
+        api_url (str): Inference API URL
+        headers (dict): API request headers
+        
+    Returns:
+        List[str]: Generated lesson content
+    """
+    def generate_single_lesson(outline: str) -> str:
+        """Generate content for a single lesson"""
+        prompt = (
+            "<s>[INST] "
+            f"Create a comprehensive {level} level lesson about the topic:\n"
+            f"{outline}\n\n"
+            "DETAILED REQUIREMENTS:\n"
+            "1. Provide clear, structured explanations\n"
+            "2. Include practical, easy-to-understand examples\n"
+            "3. Break down complex concepts into digestible parts\n"
+            "4. Conclude with key takeaways\n"
+            "5. Ensure content is engaging and educational\n"
+            "[/INST]"
+        )
+        
+        try:
+            response = requests.post(
+                api_url,
+                headers=headers,
+                json={
+                    "inputs": prompt,
+                    "parameters": {
+                        "max_new_tokens": 1024,
+                        "temperature": 0.7,
+                        "top_p": 0.9,
+                        "repetition_penalty": 1.1,
+                        "stop": ["[/INST]"]
+                    }
+                }
+            )
+            response.raise_for_status()
+            
+            # Extract and clean generated text
             lesson_content = response.json()[0]["generated_text"]
+            content_match = re.search(r'\[/INST\](.*)', lesson_content, re.DOTALL)
             
-            # Translate if needed
-            if language.lower() != 'english':
-                lesson_content = translate_text(lesson_content, language)
-            
-            return f"{outline}\n\n{lesson_content}"
-            
+            return (
+                f"{outline}\n\n"
+                f"{content_match.group(1).strip() if content_match else 'Lesson generation failed.'}"
+            )
+        
         except Exception as e:
             print(f"Lesson generation failed: {str(e)}")
-            return f"{outline}\n\nLesson generation failed."
+            return f"{outline}\n\nLesson generation failed due to an error."
     
-    lessons = []
-    for outline in outlines:
-        lesson = generate_single_lesson(outline)
-        lessons.append(lesson)
-        time.sleep(2)  # Rate limiting between lessons
-    
+    # Generate lessons with minimal delay
+    lessons = [generate_single_lesson(outline) for outline in outlines]
     return lessons
 
 
-def generate_quizzes(topic: str) -> List[Dict[str, Union[str, List[str], str]]]:
+def generate_quizzes(lesson_content: str) -> List[Dict[str, Union[str, List[str], str]]]:
     """
     Generates multiple-choice quiz questions using Mistral-7B.
     
@@ -335,7 +389,7 @@ def generate_quizzes(topic: str) -> List[Dict[str, Union[str, List[str], str]]]:
     def request_questions(batch_size: int = 3) -> List[Dict[str, Union[str, List[str], str]]]:
         """Requests a batch of questions from Mistral"""
         prompt = format_mistral_prompt(
-            f"Generate {batch_size} multiple-choice questions about {topic}. "
+            f"Generate {batch_size} multiple-choice questions about {lesson_content}. "
             "For each question:\n"
             "1. Start with 'Q:'\n"
             "2. Provide 4 options labeled A) B) C) D)\n"
@@ -406,7 +460,7 @@ def generate_quizzes(topic: str) -> List[Dict[str, Union[str, List[str], str]]]:
     # Fallback question if generation fails
     if not quiz_pool:
         return [{
-            "question": f"What is the most important concept in {topic}?",
+            "question": f"What is the most important concept in {lesson_content}?",
             "type": "multiple_choice",
             "choices": [
                 "Core principles and fundamentals",

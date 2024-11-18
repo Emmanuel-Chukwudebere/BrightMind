@@ -3,6 +3,7 @@
     "name": "BrightMind",
     "slug": "brightmind",
     "version": "1.0.0",
+    "sdkVersion": "48.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/brightmind-logo-white-icon.png",
     "owner": "e_chukwudebere",

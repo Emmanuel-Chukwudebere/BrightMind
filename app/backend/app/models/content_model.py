@@ -73,31 +73,33 @@ def generate_content(user_id: str, topic: str, level: str) -> Dict[str, Any]:
                     raise ContentGenerationError(f"Failed to generate summary after {MAX_RETRIES} attempts: {str(e)}")
                 time.sleep(RETRY_DELAY)
 
+        # Generate lesson outlines first
+        lesson_outlines = [
+            f"Lesson {i + 1} Outline for {topic} at {level} level"
+            for i in range(3)
+        ]
+
         # Initialize content containers
-        lesson_outlines = []
         lesson_contents = []
         quizzes = []
 
-        # Generate three lessons with retries
-        for i in range(3):
-            outline = f"Lesson {i + 1} Outline for {topic} at {level} level"
-            
-            # Generate lesson content with retries
+        # Generate lessons and quizzes with retries
+        for outline in lesson_outlines:
             for attempt in range(MAX_RETRIES):
                 try:
-                    # Pass outline as the third argument to generate_lessons
-                    lesson_content = generate_lessons(topic, level, outline)
-                    # Generate quiz based on lesson content instead of just outline
-                    lesson_quiz = generate_quizzes(lesson_content)
+                    # Pass both outline and level to generate_lessons
+                    lesson_content = generate_lessons(topic=topic, outlines=[outline], level=level)  # Fixed: Added topic parameter
+                    # Generate quiz based on lesson content
+                    lesson_quiz = generate_quizzes(lesson_content=lesson_content)  # Fixed: Added parameter name
                     break
                 except Exception as e:
                     if attempt == MAX_RETRIES - 1:
-                        raise ContentGenerationError(f"Failed to generate lesson {i + 1} after {MAX_RETRIES} attempts: {str(e)}")
+                        raise ContentGenerationError(f"Failed to generate lesson for outline '{outline}' after {MAX_RETRIES} attempts: {str(e)}")
                     time.sleep(RETRY_DELAY)
             
-            lesson_outlines.append(outline)
             lesson_contents.append(lesson_content)
             quizzes.append(lesson_quiz)
+            time.sleep(RETRY_DELAY)  # Rate limiting between lessons
 
         # Structure the content
         content = {
