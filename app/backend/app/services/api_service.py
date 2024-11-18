@@ -42,7 +42,7 @@ def retry_request(url, headers, payload, retries=3, backoff_factor=2):
                 return {"error": "Service unavailable, please try again later."}
     return {"error": "Max retries exceeded."}
 
-# Language code mapping for NLLB-200
+# Language code mapping for T5-BASE
 LANGUAGE_CODES = {
     'swahili': 'swh_Latn',
     'yoruba': 'yor_Latn',
