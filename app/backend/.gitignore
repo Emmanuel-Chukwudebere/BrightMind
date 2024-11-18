@@ -1,6 +1,6 @@
 firebase-adminsdk.json
 .env
 .log
-_pycache_
+_pycache_/
 app.log
 venv

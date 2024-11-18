@@ -85,8 +85,10 @@ def generate_content(user_id: str, topic: str, level: str) -> Dict[str, Any]:
             # Generate lesson content with retries
             for attempt in range(MAX_RETRIES):
                 try:
-                    lesson_content = generate_lessons(topic, level)
-                    lesson_quiz = generate_quizzes(outline)
+                    # Pass outline as the third argument to generate_lessons
+                    lesson_content = generate_lessons(topic, level, outline)
+                    # Generate quiz based on lesson content instead of just outline
+                    lesson_quiz = generate_quizzes(lesson_content)
                     break
                 except Exception as e:
                     if attempt == MAX_RETRIES - 1:

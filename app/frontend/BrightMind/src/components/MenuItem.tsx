@@ -1,7 +1,7 @@
 // src/components/MenuItem.tsx
 import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
-import { Icon } from '@fluentui/react-native';
+import { Icon } from '@fluentui/react-native-icons';
 
 const MenuItem = ({ icon, label, onPress }) => (
   <TouchableOpacity style={styles.itemContainer} onPress={onPress}>
