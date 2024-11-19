@@ -10,6 +10,9 @@ from time import sleep
 import random
 from typing import List, Dict, Union, Optional
 
+# Configure logging for error tracking and debugging
+logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
+
 # Environment variables for API keys
 HF_API_KEY = os.getenv('HUGGING_FACE_API_KEY')
 GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY")
@@ -186,7 +189,7 @@ def generate_topic_summary(
     headers: dict = None
 ) -> tuple[str, List[str]]:
     """
-    More robust summary generation with improved error handling
+    More robust summary generation with improved error handling and fallback
     
     Args:
         topic (str): The topic to generate content for
@@ -216,12 +219,15 @@ def generate_topic_summary(
     )
     
     # Default retry configuration
-    max_attempts = 3
+    max_attempts = 5
     base_delay = 1  # Base delay between retries
     
     for attempt in range(max_attempts):
         try:
-            # Make API request
+            # Add randomness to reduce predictability
+            current_delay = base_delay * (2 ** attempt) + random.random()
+            
+            # Make API request with more robust parameters
             response = requests.post(
                 api_url,
                 headers=headers,
@@ -232,39 +238,48 @@ def generate_topic_summary(
                         "temperature": 0.7,
                         "top_p": 0.9,
                         "repetition_penalty": 1.1,
-                        "stop": ["[/INST]"]
+                        "stop": ["[/INST]"],
+                        "do_sample": True  # Enable sampling for more varied outputs
                     }
-                }
+                },
+                timeout=10  # Add request timeout
             )
             response.raise_for_status()
             
             # Extract generated text
             generated_text = response.json()[0]["generated_text"]
             
-            # Parse response
+            # Parse response with more flexible parsing
             summary, outlines = robust_parse_response(generated_text, topic)
             
-            # Validate results
-            if summary and len(outlines) == 3:
-                return summary, outlines
+            # More flexible validation
+            if summary and len(outlines) >= 1:
+                # Ensure we have 3 outlines, even if parsing was partial
+                while len(outlines) < 3:
+                    outlines.append(f"Lesson {len(outlines) + 1}: Additional {topic} Topics")
+                
+                return summary, outlines[:3]
             
-            print(f"Attempt {attempt + 1}: Insufficient content generated")
+            logging.warning(f"Attempt {attempt + 1}: Insufficient content generated")
         
+        except requests.exceptions.RequestException as e:
+            logging.error(f"API Request Error on attempt {attempt + 1}: {str(e)}")
         except Exception as e:
-            print(f"Attempt {attempt + 1} failed: {str(e)}")
+            logging.error(f"Unexpected error on attempt {attempt + 1}: {str(e)}")
         
-        # Exponential backoff
-        time.sleep(base_delay * (2 ** attempt))
+        # Exponential backoff with jitter
+        time.sleep(current_delay)
     
-    # Fallback if all attempts fail
-    return (
-        f"Failed to generate summary for {topic}", 
-        [
-            f"Lesson 1: Introduction to {topic}",
-            f"Lesson 2: Core Concepts of {topic}",
-            f"Lesson 3: Advanced {topic} Topics"
-        ]
-    )
+    # Comprehensive fallback
+    fallback_summary = f"A comprehensive overview of {topic} at {level} level"
+    fallback_outlines = [
+        f"Lesson 1: Introduction to {topic}",
+        f"Lesson 2: Core Concepts of {topic}",
+        f"Lesson 3: Advanced {topic} Topics"
+    ]
+    
+    logging.warning(f"Failed to generate summary for {topic}. Returning fallback content.")
+    return fallback_summary, fallback_outlines
 
 def generate_lessons(
     topic: str, 
