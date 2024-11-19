@@ -9,12 +9,14 @@ import logging
 from time import sleep
 import random
 from typing import List, Dict, Union, Optional
+from dotenv import load_dotenv
+from dataclasses import dataclass
 
 # Configure logging for error tracking and debugging
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 
 # Environment variables for API keys
-HF_API_KEY = os.getenv('HUGGING_FACE_API_KEY')
+HF_API_KEY = os.getenv('HUGGING_FACE_API_KEY_3')
 GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY")
 GOOGLE_CSE_ID = os.getenv("GOOGLE_CSE_ID")
 FCM_SERVER_KEY = os.getenv("FCM_SERVER_KEY")
@@ -27,6 +29,134 @@ headers = {
 }
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
+
+@dataclass
+class APIConfig:
+    """Configuration for API endpoints and keys"""
+    url: str
+    key: str
+    last_used: float = 0
+    calls_remaining: int = 50  # Adjust based on your tier
+
+class HuggingFaceManager:
+    def __init__(self):
+        load_dotenv()
+        self.api_keys = self._load_api_keys()
+        self.endpoints = self._initialize_endpoints()
+        
+    def _load_api_keys(self) -> list[str]:
+        """Load multiple API keys from environment variables"""
+        keys = []
+        i = 1
+        while True:
+            key = os.getenv(f'HF_API_KEY_{i}')
+            if not key:
+                break
+            keys.append(key)
+            i += 1
+        if not keys:
+            raise ValueError("No API keys found in environment variables")
+        return keys
+    
+    def _initialize_endpoints(self) -> Dict[str, Dict[str, APIConfig]]:
+        """Initialize endpoints with multiple API keys"""
+        models = {
+            "mistral-7b-instruct-v0.2": "https://api-inference.huggingface.co/models/mistralai/Mistral-7B-Instruct-v0.2",
+            "mistral-7b-instruct-v0.3": "https://api-inference.huggingface.co/models/mistralai/Mistral-7B-Instruct-v0.3"
+        }
+        
+        endpoints = {}
+        for model_name, url in models.items():
+            endpoints[model_name] = {
+                f"key_{i}": APIConfig(url=url, key=key)
+                for i, key in enumerate(self.api_keys, 1)
+            }
+        return endpoints
+    
+    def _get_next_available_config(self, model_name: str) -> Optional[APIConfig]:
+        """Get the next available API configuration with the longest rest"""
+        if model_name not in self.endpoints:
+            raise ValueError(f"Unknown model: {model_name}")
+            
+        configs = self.endpoints[model_name]
+        current_time = time.time()
+        
+        # Sort by last used time to implement round-robin with cooldown
+        available_configs = sorted(
+            configs.values(),
+            key=lambda x: (x.calls_remaining <= 0, x.last_used)
+        )
+        
+        for config in available_configs:
+            # If it's been more than 60 seconds since last use, reset the counter
+            if current_time - config.last_used > 60:
+                config.calls_remaining = 50
+            
+            if config.calls_remaining > 0:
+                return config
+                
+        return None
+
+    def make_request(
+        self,
+        model_name: str,
+        payload: Dict[str, any],
+        timeout: int = 10,
+        max_retries: int = 3
+    ) -> Dict[str, any]:
+        """Make an API request with automatic key rotation and rate limiting"""
+        for attempt in range(max_retries):
+            config = self._get_next_available_config(model_name)
+            if not config:
+                wait_time = min(30, 2 ** attempt)
+                time.sleep(wait_time)
+                continue
+                
+            try:
+                headers = {
+                    "Authorization": f"Bearer {config.key}",
+                    "Content-Type": "application/json"
+                }
+                
+                response = requests.post(
+                    config.url,
+                    headers=headers,
+                    json=payload,
+                    timeout=timeout
+                )
+                
+                config.last_used = time.time()
+                config.calls_remaining -= 1
+                
+                if response.status_code == 429:  # Too Many Requests
+                    config.calls_remaining = 0
+                    continue
+                    
+                response.raise_for_status()
+                return response.json()
+                
+            except requests.exceptions.Timeout:
+                print(f"Timeout with key for {model_name}. Trying another key...")
+                continue
+            except requests.exceptions.RequestException as e:
+                print(f"Error with key for {model_name}: {str(e)}")
+                if attempt == max_retries - 1:
+                    raise
+                    
+        raise Exception("All API keys exhausted or rate limited")
+
+def clean_ai_response(response: str) -> str:
+    """Clean AI response by removing unwanted characters and formatting"""
+    # Remove [INST] and [/INST] tags
+    response = re.sub(r'\[/?INST\]', '', response)
+    
+    # Remove excessive newlines while preserving paragraph structure
+    response = re.sub(r'\n{3,}', '\n\n', response)
+    
+    # Remove leading/trailing whitespace while preserving intentional indentation
+    response = '\n'.join(line.rstrip() for line in response.splitlines())
+    
+    return response.strip()
 
 def retry_request(url, headers, payload, retries=3, backoff_factor=2):
     delay = 1  # Initial delay
@@ -182,174 +312,119 @@ def robust_parse_response(text: str, topic: str) -> tuple[str, List[str]]:
     return summary, outlines
 
 def generate_topic_summary(
-    topic: str, 
-    level: str, 
-    language: str = 'english', 
-    api_url: str = "https://api-inference.huggingface.co/models/mistralai/Mistral-7B-Instruct-v0.3",
-    headers: dict = None
+    topic: str,
+    level: str,
+    language: str = 'english',
+    api_manager: Optional[HuggingFaceManager] = None
 ) -> tuple[str, List[str]]:
     """
-    More robust summary generation with improved error handling and fallback
-    
-    Args:
-        topic (str): The topic to generate content for
-        level (str): Difficulty level of the content
-        language (str): Target language for content
-        api_url (str): Inference API URL
-        headers (dict): API request headers
-        
-    Returns:
-        tuple[str, List[str]]: Summary and list of outlines
+    Generate topic summary using improved API management
     """
-    # Comprehensive prompt with clear instructions
-    prompt = (
-        "<s>[INST] "
-        f"You are an expert educational content creator focusing on {topic} at a {level} level. "
-        f"Create a comprehensive overview of {topic}.\n\n"
-        "REQUIREMENTS:\n"
-        f"- Write a concise SUMMARY of {topic} in 2-3 sentences\n"
-        "- Include 3 detailed lesson outlines\n"
-        "- Ensure content is precise, educational, and beginner-friendly\n"
-        "FORMAT:\n"
-        "SUMMARY: [Your summary here]\n"
-        "Lesson 1: [Title]\n"
-        "Lesson 2: [Title]\n"
-        "Lesson 3: [Title]\n"
-        "[/INST]"
-    )
+    if api_manager is None:
+        api_manager = HuggingFaceManager()
     
-    # Default retry configuration
-    max_attempts = 5
-    base_delay = 1  # Base delay between retries
-    
-    for attempt in range(max_attempts):
-        try:
-            # Add randomness to reduce predictability
-            current_delay = base_delay * (2 ** attempt) + random.random()
-            
-            # Make API request with more robust parameters
-            response = requests.post(
-                api_url,
-                headers=headers,
-                json={
-                    "inputs": prompt,
-                    "parameters": {
-                        "max_new_tokens": 512,
-                        "temperature": 0.7,
-                        "top_p": 0.9,
-                        "repetition_penalty": 1.1,
-                        "stop": ["[/INST]"],
-                        "do_sample": True  # Enable sampling for more varied outputs
-                    }
-                },
-                timeout=10  # Add request timeout
-            )
-            response.raise_for_status()
-            
-            # Extract generated text
-            generated_text = response.json()[0]["generated_text"]
-            
-            # Parse response with more flexible parsing
-            summary, outlines = robust_parse_response(generated_text, topic)
-            
-            # More flexible validation
-            if summary and len(outlines) >= 1:
-                # Ensure we have 3 outlines, even if parsing was partial
-                while len(outlines) < 3:
-                    outlines.append(f"Lesson {len(outlines) + 1}: Additional {topic} Topics")
-                
-                return summary, outlines[:3]
-            
-            logging.warning(f"Attempt {attempt + 1}: Insufficient content generated")
-        
-        except requests.exceptions.RequestException as e:
-            logging.error(f"API Request Error on attempt {attempt + 1}: {str(e)}")
-        except Exception as e:
-            logging.error(f"Unexpected error on attempt {attempt + 1}: {str(e)}")
-        
-        # Exponential backoff with jitter
-        time.sleep(current_delay)
-    
-    # Comprehensive fallback
-    fallback_summary = f"A comprehensive overview of {topic} at {level} level"
-    fallback_outlines = [
-        f"Lesson 1: Introduction to {topic}",
-        f"Lesson 2: Core Concepts of {topic}",
-        f"Lesson 3: Advanced {topic} Topics"
-    ]
-    
-    logging.warning(f"Failed to generate summary for {topic}. Returning fallback content.")
-    return fallback_summary, fallback_outlines
+    # Clean and structured prompt
+    prompt = {
+        "instruction": f"""You are an expert educational content creator focusing on {topic} at a {level} level.
+Create a comprehensive overview of {topic}.
 
-def generate_lessons(
-    topic: str, 
-    outlines: List[str], 
-    level: str, 
-    language: str = 'english',
-    api_url: str = "https://api-inference.huggingface.co/models/mistralai/Mistral-7B-Instruct-v0.3",
-    headers: dict = None
-) -> List[str]:
-    """
-    Improved lesson generation with robust error handling
+REQUIREMENTS:
+- Write a concise SUMMARY of {topic} in 2-3 sentences
+- Include 3 detailed lesson outlines
+- Ensure content is precise, educational, and beginner-friendly
+
+FORMAT:
+SUMMARY: [Your summary here]
+Lesson 1: [Title]
+Lesson 2: [Title]
+Lesson 3: [Title]""",
+        "format_instructions": "Respond with just the content, no additional formatting or tags."
+    }
     
-    Args:
-        topic (str): The main topic for the lessons
-        outlines (List[str]): List of lesson outlines
-        level (str): Difficulty level of the content
-        language (str): Target language for content
-        api_url (str): Inference API URL
-        headers (dict): API request headers
-        
-    Returns:
-        List[str]: Generated lesson content
-    """
-    def generate_single_lesson(outline: str) -> str:
-        """Generate content for a single lesson"""
-        prompt = (
-            "<s>[INST] "
-            f"Create a comprehensive {level} level lesson about the topic:\n"
-            f"{outline}\n\n"
-            "DETAILED REQUIREMENTS:\n"
-            "1. Provide clear, structured explanations\n"
-            "2. Include practical, easy-to-understand examples\n"
-            "3. Break down complex concepts into digestible parts\n"
-            "4. Conclude with key takeaways\n"
-            "5. Ensure content is engaging and educational\n"
-            "[/INST]"
+    try:
+        response = api_manager.make_request(
+            model_name="mistral-7b-instruct-v0.2",
+            payload={
+                "inputs": prompt["instruction"],
+                "parameters": {
+                    "max_new_tokens": 512,
+                    "temperature": 0.7,
+                    "top_p": 0.9,
+                    "repetition_penalty": 1.1,
+                    "do_sample": True
+                }
+            }
         )
         
+        # Clean and parse the response
+        cleaned_response = clean_ai_response(response[0]["generated_text"])
+        summary, outlines = robust_parse_response(cleaned_response, topic)
+        
+        return summary, outlines
+        
+    except Exception as e:
+        logging.error(f"Failed to generate summary: {str(e)}")
+        return (
+            f"A comprehensive overview of {topic} at {level} level",
+            [
+                f"Lesson 1: Introduction to {topic}",
+                f"Lesson 2: Core Concepts of {topic}",
+                f"Lesson 3: Advanced {topic} Topics"
+            ]
+        )
+
+def generate_lessons(
+    topic: str,
+    outlines: List[str],
+    level: str,
+    language: str = 'english',
+    api_manager: Optional[HuggingFaceManager] = None
+) -> List[str]:
+    """
+    Generate lessons with improved API management
+    """
+    if api_manager is None:
+        api_manager = HuggingFaceManager()
+        
+    async def generate_single_lesson(outline: str) -> str:
+        prompt = {
+            "instruction": f"""Create a comprehensive {level} level lesson about:
+{outline}
+
+REQUIREMENTS:
+1. Provide clear, structured explanations
+2. Include practical, easy-to-understand examples
+3. Break down complex concepts into digestible parts
+4. Conclude with key takeaways
+5. Ensure content is engaging and educational""",
+            "format_instructions": "Respond with just the lesson content, no additional formatting or tags."
+        }
+        
         try:
-            response = requests.post(
-                api_url,
-                headers=headers,
-                json={
-                    "inputs": prompt,
+            response = api_manager.make_request(
+                model_name="mistral-7b-instruct-v0.3",
+                payload={
+                    "inputs": prompt["instruction"],
                     "parameters": {
                         "max_new_tokens": 1024,
                         "temperature": 0.7,
                         "top_p": 0.9,
-                        "repetition_penalty": 1.1,
-                        "stop": ["[/INST]"]
+                        "repetition_penalty": 1.1
                     }
                 }
             )
-            response.raise_for_status()
             
-            # Extract and clean generated text
-            lesson_content = response.json()[0]["generated_text"]
-            content_match = re.search(r'\[/INST\](.*)', lesson_content, re.DOTALL)
+            cleaned_content = clean_ai_response(response[0]["generated_text"])
+            return f"{outline}\n\n{cleaned_content}"
             
-            return (
-                f"{outline}\n\n"
-                f"{content_match.group(1).strip() if content_match else 'Lesson generation failed.'}"
-            )
-        
         except Exception as e:
-            print(f"Lesson generation failed: {str(e)}")
+            logging.error(f"Failed to generate lesson: {str(e)}")
             return f"{outline}\n\nLesson generation failed due to an error."
     
-    # Generate lessons with minimal delay
-    lessons = [generate_single_lesson(outline) for outline in outlines]
+    # Generate lessons concurrently
+    tasks = [generate_single_lesson(outline) for outline in outlines]
+    lessons = await asyncio.gather(*tasks)
+    
     return lessons
 
 

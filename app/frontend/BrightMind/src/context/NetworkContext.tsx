@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
-import NetInfo from '@react-native/netinfo';
+import NetInfo from '@react-native-community/netinfo';
 
 interface NetworkContextType {
   isConnected: boolean;
