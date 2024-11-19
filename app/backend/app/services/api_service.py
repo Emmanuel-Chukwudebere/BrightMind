@@ -386,7 +386,7 @@ def generate_lessons(
     if api_manager is None:
         api_manager = HuggingFaceManager()
         
-    async def generate_single_lesson(outline: str) -> str:
+    def generate_single_lesson(outline: str) -> str:
         prompt = {
             "instruction": f"""Create a comprehensive {level} level lesson about:
 {outline}
@@ -421,9 +421,8 @@ REQUIREMENTS:
             logging.error(f"Failed to generate lesson: {str(e)}")
             return f"{outline}\n\nLesson generation failed due to an error."
     
-    # Generate lessons concurrently
-    tasks = [generate_single_lesson(outline) for outline in outlines]
-    lessons = await asyncio.gather(*tasks)
+    # Generate lessons sequentially (no async)
+    lessons = [generate_single_lesson(outline) for outline in outlines]
     
     return lessons
 
